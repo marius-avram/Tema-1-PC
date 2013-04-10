@@ -1,0 +1,35 @@
+AVRAM Marius 324 CB
+
+Tema1PC - Implementarea unui protocol cu fereastra glisanta
+
+Mesajul a fost encodat in felul urmator: SEQ|CORP_MESAJ|CRC. Este preferabila aceasta abordare pentru a include atat numarul de secventa cat si corpul mesajului in calculearea CRC-ului, pentru ca inclusiv numarul de secventa poate fi susceptibil la erori. Pentru aceasta am realizat functiile de encodare si decodare a continutului mesajului (se gasesc in fisierul CRC.c).
+
+Pentru inceput am calculat atat la sender cat si la reciever parametrii dati din linia de comanda. Acestia erau necesari pentru a stii mai multe detalii despre conexiunea stabilita. Apoi am facut o conexiune de intializare, in care recieverul trebuie sa stie numele fisierului si numarul de cadre primite pe un ciclu. Aceasta conexiune este sensibila la erori de aceea va fi verificata si ea, iar pana nu este confirmata ca fiind corecta nu se trece mai departe.
+
+Cu parametrii obtinuti am calculat numarul de cadre (msg) care trebuie trimis astfel incat acestea sa ocupe intreg bandwidthul si dupa ce le-am trimis pe toate sa vina primul ACK. Numarul de cadre (fpcycle in program) a fost calculat cu urmatoarea formula: 
+
+fpcycle = [ viteza * delay * 1000/ (sizeof(msg) * 8) ]. 
+
+Cand am primit confirmarea il trimitem pe urmatorului si tot asa.Dupa ce am trimis toate pachetele (intreg fisierul) trebuie sa asteptam si confirmarile pentru ultimele pachete trimise. Pentru punctul a). acest lucru este mai degraba o formalitate pentru ca pachetele oricum nu sunt pierdute sau nu se corup asa ca vom primi toate confirmarile. 
+
+Pentru punctul b). am ales sa astept un mesaj de la reciver pana cand acesta vine. Programul nu se va bloca atunci cand se vor pierde pachetele de la reciever la sender pentru ca atunci cand recieverul va detecta pierderea unui pachet sau a mai multor pachete consecutive va semnala pierderea lor cu mesaje de tip NACK. Recieverul le va emite consecutiv fara sa mai astepte alte mesaje. Pentru pierderea de pachete recieverul oricum primeste un pachet, deci dupa ce a trimis toate mesajele de NACK (sau doar unul sigur, depinde de caz) trimite si un mesaj de ACK pentru cel care ajunge. Cand senderul va primi mesaje de tip ACK va sti ca trebuie sa citeasca din fisier un nou cadru pentru numarul de secventa respectiv. Daca va primi un mesaj de tip NACK va trimite tot mesajul din buffer. 
+
+Deoare implementarea unui protocol de tip go-back-N are un randament foarte slab am implementat protocolul cu repetare selectiva. Nu stiu daca am facut o implementarea "ca la carte" insa aceasta functioneaza. 
+
+La reciever am pus un buffer de buffere. Un fel de matrice alocata dinamic care isi poate modifica dimensiunea in functie de numarul de cadre care se vor pierde pe parcursul transmisiei. Fiecare subBuffer contine un ciclu complet (un numar de cadre egal cu cadrele transmise in cadrul unui ciclu). Iar bufferul mare contine cate buffere sunt necesare (adica cate buffere cu erori exista - depinde de transmisie). Daca un buffer este complet, adica toate cadrele din el sunt fie confirmate fie inactive atunci, el se poate scrie in fisier si elibera. Cadrul inactiv apare atunci cand in unul din subBufferele anterioare avem un cadru lipsa (neconfirmat). El devine inactiv pentru ca in ciclul urmator cadrul cu numarul de secventa respectiv se va referi la cadrul neconfirmat, iar in cadrul curent nu va fi utilizat niciodata numaru lde secventa respectiv. 
+
+Desi conceptul este mai greu de explicat si solutia este consumatoare de memorie (buffer de buffere) acesta rezolva problema indicilor care s-ar intercala intr-un mod ciudat atunci cand se pierde un cadru si s-ar fi folosit un singur buffer. 
+
+
+La punctul c). am calculat codul CRC cu functiile de la laborator. Am calculat in ambele main -uri tabelul si l-am folosit pentru calcularea codului CRC transmintandu-l functiilor care aveau nevoie de el. Am decis ca e mai bine pentru ca avem de aface cu cantitati mari de informatii si ar fi inuti sa recalulam aceeasi informatie de mai multe ori. La sender cand este encodata informatia calculam CRC-ul, iar la reciever il calculam din nou si il comparam cu cel de la sender. Daca rezultatele difera inseamna ca pachetul este corup. In cazul in care pachetul este corupt l-am tratat ca si cum un singur pachet s-a pierdut si el trebuie asteptat din nou. Pentru aceasta am folosit codul utilizat la punctul b.
+
+La punctul d). pentru a domoli un sender prea rapid i-am trimis acestuia la initializarea conexiunii dimenisiunea ferestrei proprii. Daca este mai mica decat fereastra calculata dupa formula atunci aceasta se va modifica si informatiile vor fi transmise mai incet. 
+
+
+Observatii: 
+
+- Cateodata transferul nu porneste (cu sanse ~5%) din motive necunoscute. Dupa oprirea procesului si inca o rulare a scriptului run_experiment pare sa mearga in regula. 
+
+- Cele doua programe nu functioneaza cu fisiere binare generate cu utilitarul dd. Cauza par a fi caracterele \0. Din cauza ca am folosit functii de prelucrare pe stringuri acestea vor altera continutul final. In schimb pe fisiere de tip text totul merge bine.
+
+- Daca readmeul nu e foarte coerent e din cauza ca a fost scrie la ora 2AM.
